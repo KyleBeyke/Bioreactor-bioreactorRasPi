@@ -15,37 +15,18 @@ import os.path
 import csv
 from remotecommunication import get_credentials, send_mass_email_with_log, send_mass_sms, user_setup
 
-
-# Logging
-home = os.path.expanduser('~')
-log_file = os.path.join(home, '.bioreactor')
-if not os.path.exists(log_file):
-    os.mkdir(log_file)
-log_file = os.path.join(log_file, '.log')
-if not os.path.exists(log_file):
-    os.mkdir(log_file)
-log_file = os.path.join(log_file, 'log.log')
-FORMAT = '%(asctime)s.%(msecs)03d %(levelname)s [%(funcName)s] %(message)s'
-logging.basicConfig(format=FORMAT, datefmt='%Y-%m-%d,%H:%M:%S', level=logging.INFO, filename=log_file)
-logger = logging.getLogger()
-stdout_handler = logging.StreamHandler(sys.stdout)
-formatter = logging.Formatter('%(levelname)s [%(funcName)s] %(message)s')
-stdout_handler.setFormatter(formatter)
-logger.addHandler(stdout_handler)
-
 # global queues used to house stings from/to serial
 validation_queue = queue.Queue()
 data_queue = queue.Queue()
 input_queue = queue.Queue()
 
 # globals for graphing
-list_size_limit = 50
+plt.ion()
+fig, (ax3, ax2, ax1) = plt.subplots(3)
 historic_date_times = []
 historic_co2_ppm = []
 historic_temps = []
 historic_feed_rotations = []
-plt.ion()
-fig, (ax3, ax2, ax1) = plt.subplots(3)
 
 # global flags
 data_updated = False
@@ -54,7 +35,26 @@ reset_program = False
 stop_input = False
 
 
-def all_points_bulletin(subject, message):
+def start_logger():
+    home = os.path.expanduser('~')
+    log_file = os.path.join(home, '.bioreactor')
+    if not os.path.exists(log_file):
+        os.mkdir(log_file)
+    log_file = os.path.join(log_file, '.log')
+    if not os.path.exists(log_file):
+        os.mkdir(log_file)
+    log_file = os.path.join(log_file, 'log.log')
+    FORMAT = '%(asctime)s.%(msecs)03d %(levelname)s [%(funcName)s] %(message)s'
+    logging.basicConfig(format=FORMAT, datefmt='%Y-%m-%d,%H:%M:%S', level=logging.INFO, filename=log_file)
+    logger = logging.getLogger()
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    formatter = logging.Formatter('%(levelname)s [%(funcName)s] %(message)s')
+    stdout_handler.setFormatter(formatter)
+    logger.addHandler(stdout_handler)
+    return logger
+
+
+def all_points_bulletin(logger, subject, message):
     service = get_credentials()
     send_mass_sms(service, subject, message)
     send_mass_email_with_log(service, message)
@@ -69,24 +69,21 @@ def limit_list_size(array, limit_size):
 
 
 def write_serial_data(serial_connection, string):
-    global logger
     string = string + '\n'
     string = bytes(string, 'utf-8')
     serial_connection.write(string)
 
 
-def shake_hand(serial_connection, string):
-    global logger
+def shake_hand(serial_connection, string, logger):
     if string == "FLASH":
         response = 'THUNDER'
         write_serial_data(serial_connection, response)
         logger.info('Responded to handshake request')
-        get_validation(serial_connection)
+        get_validation(serial_connection, logger)
         print('Type `help` for command information')
 
 
-def validate(serial_connection, check):
-    global logger
+def validate(serial_connection, check, logger):
     if check:
         string = 'CONFIRMED'
         write_serial_data(serial_connection, string)
@@ -97,9 +94,8 @@ def validate(serial_connection, check):
         logger.error('Sent failing validation')
 
 
-def get_validation(serial_connection):
-    global logger
-    timeout = time.time() + 60  # 10 second timeout for function to complete
+def get_validation(serial_connection, logger):
+    timeout = time.time() + 60  # 60 second timeout for function to complete
     while time.time() < timeout:
         if serial_connection.in_waiting > 0:
             line = serial_connection.readline().decode('utf-8').rstrip()
@@ -117,46 +113,46 @@ def get_validation(serial_connection):
     return False
 
 
-def read_serial_data(serial_connection):
-    global data_queue, validation_queue, logger
+def read_serial_data(serial_connection, logger):
+    global data_queue, validation_queue
     while serial_connection.in_waiting > 0:
         # strip serial string of unnecessary garbage
         line = serial_connection.readline().decode('utf-8').rstrip()
         if line == "FLASH":
             logger.info('Handshake request received')
-            shake_hand(serial_connection, line)
+            shake_hand(serial_connection, line, logger)
         elif line == "FEEDING":
             logger.info('Feed operation initiated')
-            validate(serial_connection, True)
+            validate(serial_connection, True, logger)
             print('Please wait for feed operation to resolve...')
         elif line == "FEEDDONE":
             logger.info('Feed action complete')
-            validate(serial_connection, True)
+            validate(serial_connection, True, logger)
         else:
             values = line.split(",")
             if values[0] == 'DATA' or values[0] == 'DATAFEED':
                 data_queue.put(line)
                 logger.info('Data received: ' + line)
-                validate(serial_connection, True)
+                validate(serial_connection, True, logger)
             elif values[0] == 'SUCCESS' or values[0] == 'ERROR':
                 validation_queue.put(line)
                 logger.info('Message from microcontroller: ' + line)
-                validate(serial_connection, True)
+                validate(serial_connection, True, logger)
             elif values[0] == 'CURFEEDPPM':
                 logger.info('Current feed CO2 threshold: ' + values[1])
-                validate(serial_connection, True)
+                validate(serial_connection, True, logger)
             elif values[0] == 'CURFEEDROT':
                 logger.info('Current feed rotations: ' + values[1])
-                validate(serial_connection, True)
+                validate(serial_connection, True, logger)
             else:
                 # print('ERROR: Data could not be parsed from the serial buffer!')
                 logger.error('Data could not be parsed from the serial buffer: ' + line)
-                validate(serial_connection, False)
+                validate(serial_connection, False, logger)
     return
 
 
-def print_validations():
-    global validation_queue, logger
+def print_validations(logger):
+    global validation_queue
     while not validation_queue.empty():
         line = validation_queue.get()
         values = line.split(",")
@@ -168,8 +164,7 @@ def print_validations():
     return
 
 
-def log_data(read_time, ppm, temp, feed_rotations):
-    global logger
+def log_data(read_time, ppm, temp, feed_rotations, logger):
     read_time = datetime.datetime.strftime(read_time, '%Y-%m-%d %H:%M:%S')
     headers = ['date_time_stamp', 'relative_ppm', 'temp', 'feed_rotations']
     home_dir = os.path.expanduser('~')
@@ -193,9 +188,9 @@ def log_data(read_time, ppm, temp, feed_rotations):
     logger.info('Data logged')
 
 
-def store_data():
-    global data_queue, historic_date_times, historic_co2_ppm, historic_temps, historic_feed_rotations, list_size_limit
-    global data_updated, logger
+def store_data(logger):
+    global data_queue, historic_date_times, historic_co2_ppm, historic_temps, historic_feed_rotations, data_updated
+    list_size_limit = 200
     # read the serial, parse out data and cast as appropriate types
     while not data_queue.empty():
         read_time = datetime.datetime.now()
@@ -232,7 +227,7 @@ def store_data():
             historic_temps = limit_list_size(historic_temps, list_size_limit)
             historic_feed_rotations.append(feed_rotations)
             historic_feed_rotations = limit_list_size(historic_feed_rotations, list_size_limit)
-            log_data(read_time, ppm, temp, feed_rotations)
+            log_data(read_time, ppm, temp, feed_rotations, logger)
             data_queue.task_done()
             logger.info('Data was added to lists')
             data_updated = True
@@ -241,10 +236,10 @@ def store_data():
         return
 
 
-def handle_data(serial_connection):
-    read_serial_data(serial_connection)
-    print_validations()
-    store_data()
+def handle_data(serial_connection, logger):
+    read_serial_data(serial_connection, logger)
+    print_validations(logger)
+    store_data(logger)
 
 
 def queue_keyboard_input():
@@ -259,8 +254,8 @@ def queue_keyboard_input():
 
 
 # command prompt function
-def command_line_interface(serial_connection):
-    global reset_program, exit_program, logger, input_queue, stop_input
+def command_line_interface(serial_connection, logger):
+    global reset_program, exit_program, input_queue, stop_input
     if not input_queue.empty():
         command_raw = input_queue.get()
         command_raw = command_raw.rstrip('\n')
@@ -273,12 +268,12 @@ def command_line_interface(serial_connection):
         elif command_raw == 'get-feed-rotations':
             logger.info('Requesting current feed rotations. Please wait...')
             write_serial_data(serial_connection, command_raw)
-            get_validation(serial_connection)
+            get_validation(serial_connection, logger)
 
         elif command_raw == 'get-feed-ppm':
             logger.info('Requesting current feed CO2 ppm threshold. Please wait...')
             write_serial_data(serial_connection, command_raw)
-            get_validation(serial_connection)
+            get_validation(serial_connection, logger)
         elif command_raw == 'exit':
             logger.info('Initiating exit')
             # print
@@ -306,7 +301,7 @@ def command_line_interface(serial_connection):
                     logger.info('Initiating microcontroller reset. Please wait...')
                     string = str(command) + "," + str(value)
                     write_serial_data(serial_connection, string)
-                    get_validation(serial_connection)
+                    get_validation(serial_connection, logger)
                 elif value == 0:
                     logger.info('Initiating program reset')
                     # print('Initiating program reset...')
@@ -321,7 +316,7 @@ def command_line_interface(serial_connection):
                     logger.info('Changing feed rotations to ' + str(value) + '. Please wait...')
                     string = str(command) + "," + str(value)
                     write_serial_data(serial_connection, string)
-                    get_validation(serial_connection)
+                    get_validation(serial_connection, logger)
                 else:
                     logger.error('Bad ' + str(command) + ' input')
                     # print('ERROR: The value for', command, 'must be within range of 1 to 100!')
@@ -331,7 +326,7 @@ def command_line_interface(serial_connection):
                     logger.info('Changing feed CO2 ppm threshold ' + str(value) + '. Please wait...')
                     string = str(command) + "," + str(value)
                     write_serial_data(serial_connection, string)
-                    get_validation(serial_connection)
+                    get_validation(serial_connection, logger)
                 else:
                     logger.error('Bad ' + str(command) + ' input')
                     # print('ERROR: The value for', command, 'must be within range of 500 to 5000!')
@@ -348,8 +343,8 @@ def get_serial_ports():
     return connected
 
 
-def get_serial_connection(port=None):
-    global logger, reset_program, exit_program, stop_input
+def get_serial_connection(logger, port=None):
+    global reset_program, exit_program, stop_input
     if port is None:
         while not exit_program:
             connected_ports = get_serial_ports()
@@ -404,8 +399,8 @@ def get_serial_connection(port=None):
 
 
 # refresh interval is measured in seconds
-def graph_data():
-    global historic_date_times, historic_co2_ppm, historic_temps, historic_feed_rotations, data_updated, logger
+def graph_data(logger):
+    global historic_date_times, historic_co2_ppm, historic_temps, historic_feed_rotations, data_updated
     global fig, ax1, ax2, ax3
     if data_updated:
         plt.gcf()
@@ -454,14 +449,14 @@ def graph_data():
         data_updated = False
 
 
-def main():
-    global reset_program, exit_program, logger, stop_input
+def main(logger):
+    global reset_program, exit_program, stop_input
     # thread is started that runs the main program in the "background"
     logger.info('Program initializing')
     # print('Bioreactor interface initializing...')
     user_setup()
     while not exit_program:
-        serial_connection = get_serial_connection()
+        serial_connection = get_serial_connection(logger)
         if serial_connection:
             print('Please wait for handshake...')
             stop_input = False
@@ -469,9 +464,9 @@ def main():
             input_thread.daemon = True
             input_thread.start()
             while not reset_program and serial_connection:
-                handle_data(serial_connection)
-                command_line_interface(serial_connection)
-                graph_data()
+                handle_data(serial_connection, logger)
+                command_line_interface(serial_connection, logger)
+                graph_data(logger)
                 if exit_program:
                     break
             input_thread.join()
@@ -485,4 +480,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    log = start_logger()
+    main(log)
