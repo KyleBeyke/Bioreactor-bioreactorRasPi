@@ -6,7 +6,6 @@ import sys
 import threading
 import time
 from sys import exit
-from time import sleep
 from matplotlib import ticker, dates
 import matplotlib.pyplot as plt
 import serial
@@ -32,6 +31,7 @@ historic_feed_rotations = []
 data_updated = False
 exit_program = False
 reset_program = False
+pause_input = False
 stop_input = False
 
 
@@ -109,23 +109,27 @@ def get_validation(serial_connection, logger):
                 # print('ERROR: Validation Failed!')
                 logger.error('Validation answer not understood')
                 return False
-    logger.error('Validation request timed out')
+    error_string = 'Validation request timed out. Check microcontroller'
+    logger.error(error_string)
+    all_points_bulletin(logger, 'ERROR', error_string)
     return False
 
 
 def read_serial_data(serial_connection, logger):
-    global data_queue, validation_queue
+    global data_queue, validation_queue, pause_input
     while serial_connection.in_waiting > 0:
         # strip serial string of unnecessary garbage
         line = serial_connection.readline().decode('utf-8').rstrip()
         if line == "FLASH":
             logger.info('Handshake request received')
             shake_hand(serial_connection, line, logger)
-        elif line == "FEEDING":
-            logger.info('Feed operation initiated')
+        elif line == "READING":
+            pause_input = True
+            logger.info('Read/Feed operation initiated')
             validate(serial_connection, True, logger)
-            print('Please wait for feed operation to resolve...')
-        elif line == "FEEDDONE":
+            print('Please wait for the read/feed operation to resolve...')
+        elif line == "READDONE":
+            pause_input = False
             logger.info('Feed action complete')
             validate(serial_connection, True, logger)
         else:
@@ -146,8 +150,10 @@ def read_serial_data(serial_connection, logger):
                 validate(serial_connection, True, logger)
             else:
                 # print('ERROR: Data could not be parsed from the serial buffer!')
-                logger.error('Data could not be parsed from the serial buffer: ' + line)
+                error_string = 'Data could not be parsed from the serial buffer: ' + line
+                logger.error(error_string)
                 validate(serial_connection, False, logger)
+                all_points_bulletin(logger, 'ERROR', error_string)
     return
 
 
@@ -161,6 +167,8 @@ def print_validations(logger):
         # print('FROM CONTROLLER:' + validation + ':' + message)
         logger.info(validation + ' from controller: ' + message)
         validation_queue.task_done()
+        if validation == 'ERROR':
+            all_points_bulletin(logger, validation, message)
     return
 
 
@@ -186,6 +194,7 @@ def log_data(read_time, ppm, temp, feed_rotations, logger):
                 {'date_time_stamp': read_time, 'relative_ppm': ppm, 'temp': temp, 'feed_rotations': feed_rotations})
     csvfile.close()
     logger.info('Data logged')
+    return
 
 
 def store_data(logger):
@@ -211,12 +220,16 @@ def store_data(logger):
             feed_rotations = int(feed_rotations_raw)
         else:
             # print('ERROR: Data grab failed!')
-            logger.error('Data grab failed')
+            error_string = 'Data grab failed'
+            logger.error(error_string)
+            all_points_bulletin(logger, 'ERROR', error_string)
             return
         # throw error if CO2 is out of range
         if not ppm >= 100 or ppm > 10000:
             # print('ERROR: CO2 concentration is out of range!')
-            logger.error('CO2 concentration is out of range')
+            error_string = 'CO2 concentration is out of range'
+            logger.error(error_string)
+            all_points_bulletin(logger, 'ERROR', error_string)
             return
         else:
             historic_date_times.append(read_time)
@@ -232,8 +245,7 @@ def store_data(logger):
             logger.info('Data was added to lists')
             data_updated = True
             return
-    else:
-        return
+    return
 
 
 def handle_data(serial_connection, logger):
@@ -243,14 +255,16 @@ def handle_data(serial_connection, logger):
 
 
 def queue_keyboard_input():
-    global input_queue, stop_input, exit_program
+    global input_queue, stop_input, pause_input, exit_program
     if not exit_program:
         while True:
             keyboard_input = sys.stdin.readline()
-            if keyboard_input != '\n':
-                input_queue.put(keyboard_input)
             if stop_input:
                 break
+            elif pause_input:
+                print('Command ignored. Please wait for read event to resolve')
+            elif keyboard_input != '\n':
+                input_queue.put(keyboard_input)
 
 
 # command prompt function
@@ -385,7 +399,6 @@ def get_serial_connection(logger, port=None):
             else:
                 # print('ERROR: No serial port connections detected!')
                 logger.error('No serial port connections detected!')
-                sleep(.1)
                 logger.error('Requesting user to connect microcontroller')
                 input('Please connect the microcontroller and press ENTER...')
     else:
