@@ -27,7 +27,13 @@ def get_credentials():
     # created automatically when the authorization flow completes for the first
     # time.
     home_dir = os.path.expanduser('~')
-    credentials_dir = os.path.join(home_dir, '.bioreactor', '.credentials', 'token.pickle')
+    credentials_dir = os.path.join(home_dir, '.bioreactor')
+    if not os.path.exists(credentials_dir):
+        os.mkdir(credentials_dir)
+    credentials_dir = os.path.join(credentials_dir, '.credentials')
+    if not os.path.exists(credentials_dir):
+        os.mkdir(credentials_dir)
+    credentials_dir = os.path.join(credentials_dir, 'token.pickle')
     if os.path.exists(credentials_dir):
         with open(credentials_dir, 'rb') as token:
             creds = pickle.load(token)

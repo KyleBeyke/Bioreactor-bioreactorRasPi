@@ -18,7 +18,13 @@ from remotecommunication import get_credentials, send_mass_email_with_log, send_
 
 # Logging
 home = os.path.expanduser('~')
-log_file = os.path.join(home, '.bioreactor', '.log', 'log.log')
+log_file = os.path.join(home, '.bioreactor')
+if not os.path.exists(log_file):
+    os.mkdir(log_file)
+log_file = os.path.join(log_file, '.log')
+if not os.path.exists(log_file):
+    os.mkdir(log_file)
+log_file = os.path.join(log_file, 'log.log')
 FORMAT = '%(asctime)s.%(msecs)03d %(levelname)s [%(funcName)s] %(message)s'
 logging.basicConfig(format=FORMAT, datefmt='%Y-%m-%d,%H:%M:%S', level=logging.INFO, filename=log_file)
 logger = logging.getLogger()
@@ -167,13 +173,19 @@ def log_data(read_time, ppm, temp, feed_rotations):
     read_time = datetime.datetime.strftime(read_time, '%Y-%m-%d %H:%M:%S')
     headers = ['date_time_stamp', 'relative_ppm', 'temp', 'feed_rotations']
     home_dir = os.path.expanduser('~')
-    log_path = os.path.join(home_dir, '.bioreactor', '.log', 'data.csv')
-    if not os.path.exists(log_path):
-        with open(log_path, 'a') as csvfile:
+    csv_path = os.path.join(home_dir, '.bioreactor')
+    if not os.path.exists(csv_path):
+        os.mkdir(csv_path)
+    csv_path = os.path.join(csv_path, '.log')
+    if not os.path.exists(csv_path):
+        os.mkdir(csv_path)
+    csv_path = os.path.join(csv_path, 'data.csv')
+    if not os.path.exists(csv_path):
+        with open(csv_path, 'a') as csvfile:
             writer = csv.DictWriter(csvfile, delimiter=',', lineterminator='\n', fieldnames=headers)
             writer.writeheader()  # file doesn't exist yet, write a header
     else:
-        with open(log_path, 'a') as csvfile:
+        with open(csv_path, 'a') as csvfile:
             writer = csv.DictWriter(csvfile, delimiter=',', lineterminator='\n', fieldnames=headers)
             writer.writerow(
                 {'date_time_stamp': read_time, 'relative_ppm': ppm, 'temp': temp, 'feed_rotations': feed_rotations})
