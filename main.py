@@ -276,7 +276,7 @@ def command_line_interface(serial_connection, logger):
         if command_raw == 'help':
             print(
                 "Available commands:\n   reset [INT VALUE] (1 for controller, 0 for program)\n   "
-                "   get-feed-rotations\n    get-feed-ppm\n"
+                "get-feed-rotations\n    get-feed-ppm\n"
                 "set-feed-rotations [INT VALUE] (1-100)\n   set-feed-ppm [INT VALUE] (500-5000)\n   exit ("
                 "exits program)\nFormat: [COMMAND] OPTIONAL[VALUE]\nExample: reset 1 (where 1 resets the controller)\n")
         elif command_raw == 'get-feed-rotations':

@@ -165,7 +165,13 @@ def get_contacts(service):
 
 def write_user_json(user_dict):
     home_dir = os.path.expanduser('~')
-    config_dir = os.path.join(home_dir, '.bioreactor', '.config', 'users.json')
+    config_dir = os.path.join(home_dir, '.bioreactor')
+    if not os.path.exists(config_dir):
+        os.mkdir(config_dir)
+    config_dir = os.path.join(config_dir, '.config')
+    if not os.path.exists(config_dir):
+        os.mkdir(config_dir)
+    config_dir = os.path.join(config_dir, 'users.json')
     if not os.path.exists(config_dir):
         with open(config_dir, 'w') as write_file:
             json.dump(user_dict, write_file, indent=1)
@@ -242,6 +248,3 @@ def user_setup():
                 print('Input failed\nPlease enter `y` for yes or `n` for no')
         if answer.lower() == 'n':
             break
-
-
-user_setup()
