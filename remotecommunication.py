@@ -191,7 +191,9 @@ def write_user_json(user_dict):
 
 def get_users_json():
     home_dir = os.path.expanduser('~')
-    config_dir = os.path.join(home_dir, '.bioreactor', '.config', 'users.json')
+    config_dir = os.path.join(home_dir, '.bioreactor')
+    config_dir = os.path.join(config_dir, '.config')
+    config_dir = os.path.join(config_dir, 'users.json')
     with open(config_dir) as write_file:
         data = json.load(write_file)
     return data
@@ -216,7 +218,9 @@ def get_user_sms_list():
 def send_mass_email_with_log(service, message):
     email_list = get_user_email_list()
     home_dir = os.path.expanduser('~')
-    log_file = os.path.join(home_dir, '.bioreactor', '.log', 'log.log')
+    log_file = os.path.join(home_dir, '.bioreactor')
+    log_file = os.path.join(log_file, '.log')
+    log_file = os.path.join(log_file, 'log.log')
     for address in email_list:
         email = create_message_with_attachment('RasPi@Bioreactor', address, 'Bioreactor Log', message, log_file)
         message_id = send_message(service, email)
