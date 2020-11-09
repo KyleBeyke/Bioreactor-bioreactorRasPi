@@ -203,7 +203,8 @@ def get_user_email_list():
     data = get_users_json()
     emails = []
     for user in data['users']:
-        emails.append(user["email"])
+        email = user['email']
+        emails.append(email)
     return emails
 
 
@@ -211,7 +212,8 @@ def get_user_sms_list():
     data = get_users_json()
     sms_emails = []
     for user in data['users']:
-        sms_emails.append(user["sms_email"])
+        sms_email = user['sms_email']
+        sms_emails.append(sms_email)
     return sms_emails
 
 
@@ -252,3 +254,6 @@ def user_setup():
                 print('Input failed\nPlease enter `y` for yes or `n` for no')
         if answer.lower() == 'n':
             break
+
+service = get_credentials()
+send_mass_sms(service, 'subject', 'message')
