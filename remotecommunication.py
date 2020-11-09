@@ -49,7 +49,7 @@ def get_credentials():
         with open(credentials_dir, 'wb') as token:
             pickle.dump(creds, token)
 
-    service = build('gmail', 'v1', credentials=creds)
+    service = build('gmail', 'v1', credentials=creds, cache_discovery=False)
     return service
 
 
