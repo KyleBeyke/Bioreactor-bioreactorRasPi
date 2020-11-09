@@ -203,7 +203,7 @@ def get_user_email_list():
     data = get_users_json()
     emails = []
     for user in data['users']:
-        emails.append(user.get("email"))
+        emails.append(user["email"])
     return emails
 
 
@@ -211,7 +211,7 @@ def get_user_sms_list():
     data = get_users_json()
     sms_emails = []
     for user in data['users']:
-        sms_emails.append(user.get("sms_email"))
+        sms_emails.append(user["sms_email"])
     return sms_emails
 
 
