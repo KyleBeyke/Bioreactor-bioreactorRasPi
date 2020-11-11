@@ -121,7 +121,7 @@ def get_contacts(service):
                                      'contact address: {1}'.format(
                                          name, str(otp)))
             message_id = send_message(service, message)
-            print('A 6-digit OTP has been emailed to your provided sms address with message ID: {0}\nPlease check '
+            print('A 6-digit OTP has been emailed to your provided email address with message ID: {0}\nPlease check '
                   'your email messages and enter your 6 digit OTP to confirm'.format(str(message_id)))
             user_otp = input('>')
             if otp == int(user_otp):
@@ -154,10 +154,11 @@ def get_contacts(service):
             break
         else:
             print('User input rejected')
-    user_contact_dict = dict(users=[{"user": name,
-                                     "email": email,
-                                     "sms_email": sms_email
-                                     }])
+    user_contact_dict = {
+        'user': name,
+        'email': email,
+        'sms_email': sms_email
+    }
     print('Attempting to add the following user')
     print(user_contact_dict)
     return user_contact_dict
@@ -174,17 +175,19 @@ def write_user_json(user_dict):
     config_dir = os.path.join(config_dir, 'users.json')
     if not os.path.exists(config_dir):
         with open(config_dir, 'w') as write_file:
-            json.dump(user_dict, write_file, indent=1)
+            new_dict = dict()
+            new_dict[0] = user_dict
+            json.dump(new_dict, write_file, indent=1)
     else:
         with open(config_dir) as write_file:
             data = json.load(write_file)
-        for user_value in user_dict['users']:
-            for data_value in data['users']:
-                if user_value == data_value:
-                    print('Write failed\nThis user has matching values in the existing dictionary')
-                    return False
-        temp = data
-        temp['users'].append(user_dict['users'])
+        for key in data:
+            for user_value in user_dict:
+                for data_value in data[key]:
+                    if user_dict[user_value] == data[key][data_value]:
+                        print('Write failed\nThis user has matching values in an existing record')
+                        return False
+        data[len(data.values())] = user_dict
         with open(config_dir, 'w') as write_file:
             json.dump(data, write_file, indent=1)
 
@@ -194,26 +197,27 @@ def get_users_json():
     config_dir = os.path.join(home_dir, '.bioreactor')
     config_dir = os.path.join(config_dir, '.config')
     config_dir = os.path.join(config_dir, 'users.json')
-    with open(config_dir) as write_file:
-        data = json.load(write_file)
-        return data
+    try:
+        with open(config_dir) as write_file:
+            data = json.load(write_file)
+            return data
+    except FileNotFoundError:
+        return False
 
 
 def get_user_email_list():
     data = get_users_json()
     emails = []
-    for user in data['users']:
-        email = user['email']
-        emails.append(email)
+    for key in data:
+        emails.append(data[key].get('email'))
     return emails
 
 
 def get_user_sms_list():
     data = get_users_json()
     sms_emails = []
-    for user in data['users']:
-        sms_email = user['sms_email']
-        sms_emails.append(sms_email)
+    for key in data:
+        sms_emails.append(data[key].get('sms_email'))
     return sms_emails
 
 
@@ -241,19 +245,18 @@ def send_mass_sms(service, subject, message):
 
 def user_setup():
     service = get_credentials()
-    while True:
+    if not get_users_json():
         user = get_contacts(service)
-        write_user_json(user)
-        print('User added to JSON file')
-        while True:
-            print('Would you like to add another user?')
-            answer = input('>')
-            if answer.lower() == 'n' or answer.lower() == 'y':
-                break
-            else:
-                print('Input failed\nPlease enter `y` for yes or `n` for no')
+        if write_user_json(user):
+            print('User added to JSON file')
+    while True:
+        print('Would you like to add a user contact entry?')
+        answer = input('>')
         if answer.lower() == 'n':
             break
-
-service = get_credentials()
-send_mass_sms(service, 'subject', 'message')
+        if answer.lower() == 'y':
+            user = get_contacts(service)
+            if write_user_json(user):
+                print('User added to JSON file')
+        else:
+            print('Input failed\nPlease enter `y` for yes or `n` for no')
