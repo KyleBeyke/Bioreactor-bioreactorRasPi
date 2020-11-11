@@ -250,7 +250,7 @@ def user_setup():
         if write_user_json(user):
             print('User added to JSON file')
     while True:
-        print('Would you like to add a user contact entry?')
+        print('Would you like to add a user contact entry? (Y/n)')
         answer = input('>')
         if answer.lower() == 'n':
             break
